@@ -160,6 +160,7 @@ def get_class_activations(train_dataset, model, attn_heads):
     int_to_str = {}
     str_to_activation = {}
     str_to_count = {}
+    save_act = {}
 
 
     for item in tqdm(train_dataset):
@@ -171,9 +172,11 @@ def get_class_activations(train_dataset, model, attn_heads):
         head_act = torch.stack(head_act)
 
         if item['label'] in str_to_activation.keys():
+            save_act[item['label']] += [head_act]
             str_to_activation[item['label']] += head_act
             str_to_count[item['label']] += 1
         else:
+            save_act[item['label']] = [head_act]
             str_to_activation[item['label']] = head_act
             int_label = len(str_to_activation.keys()) - 1
             str_to_int[item['label']] = int_label
@@ -181,10 +184,13 @@ def get_class_activations(train_dataset, model, attn_heads):
             str_to_count[item['label']] = 1
     
     avg_activations = []
+    
     for key, item in str_to_activation.items():
+        save_act[key] = torch.stack(save_act[key], dim=0)
+        # torch.save(save_act[key], 'pets/' + str(key) + '.pt')
+        # print(f'Key {key} save_act shape {save_act[key].shape}')
         avg_activations.append(torch.div(item, str_to_count[key]))
     avg_activations = torch.stack(avg_activations)
-
     return avg_activations, str_to_int, int_to_str
 
 
@@ -247,6 +253,7 @@ def mllm_encode(model, train_data, num_head):
     #(class, head_count, resid_dim)
     print('\nExtract Mean Activations\n')
     class_activations, str_to_int, int_to_str = get_class_activations(train_data, model, all_heads)
+    print(f'Class Activations {class_activations.shape} Str to int {str_to_int} int to str {int_to_str}')
     success_count = [0 for _ in range(class_activations.shape[1])]
 
     print('\nSelect Top Sparse Heads\n')

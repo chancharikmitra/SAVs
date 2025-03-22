@@ -1,10 +1,19 @@
+from .utils import *
+from .model import *
+from .preprocess import *
+from tqdm import tqdm
+import torch
+import argparse
+torch.set_grad_enabled(False)
+from transformers.utils import logging
+logging.set_verbosity_error() 
+
 def eval_dataset(args):
    model = load_model(args.model_name, args.data_name)
    train_data = open_data(args.data_name, args.train_path)
    test_data = open_data(args.data_name, args.val_path)
    
    multimodal_embeddings = mllm_encode(model, train_data, num_head=20)
-   
    predictions = []
    q_correct = 0  # Question accuracy count
    i_correct = 0  # Image accuracy count  
@@ -18,12 +27,12 @@ def eval_dataset(args):
        group_preds = []
        
        # Get predictions for the group
-       print(i)
+       # print(i)
        for item in group:
            if args.eval_zeroshot:
                # Zero-shot evaluation
                model_input = model.insert_image(item['question'], [item['image']])
-               pred = model.generate(model_input, max_new_tokens=32).strip()
+               pred = model.generate(model_input, max_new_tokens=1).strip()
            else:
                # Regular embedding-based evaluation
                pred = mllm_classify(item, model, multimodal_embeddings)

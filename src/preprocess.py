@@ -12,7 +12,7 @@ import os
 
 def open_data(dataset_name, path):
 
-    jsonl_format_dataset = ["natural_ret"]
+    jsonl_format_dataset = ["natural_ret", "sugarcrepe"]
     list_format_dataset = ["vlguard", "MHalu", "eurosat", "blink", "pets"]
 
 
@@ -38,6 +38,8 @@ def get_format_func(cur_dataset):
         return format_blink
     if cur_dataset == "natural_ret":
         return format_natural_ret
+    if cur_dataset == "sugarcrepe":
+        return format_sugarcrepe
     if cur_dataset == "eurosat":
         return format_eurosat
     if cur_dataset == "pets":
@@ -298,6 +300,51 @@ def format_natural_ret(all_data, cur_item=None, num_shot=0, model_helper=None, s
     few_shot_prompt = ''
     if num_shot > 0:
         sampled_data = natural_ret_balance(all_data)
+        for sample in sampled_data:
+            few_shot_prompt += prompt.format(sample['question']) + f" {sample['label']}\n"
+            image_list.append(sample["image"])
+    
+    full_text = few_shot_prompt + prompt.format(question)
+    # print(f'Prompt {full_text}')
+    image_list.append(image)
+    
+    return full_text, image_list, label, question_id
+
+def sugarcrepe_balance(all_data):
+    yes_samples = []
+    no_samples = []
+
+    sampled = random.sample(all_data, 20)  # Sample more than needed to ensure we find enough of each
+    for item in sampled:
+        item = json.loads(item.strip())
+        if item['label'] == 'Yes' and len(yes_samples) != 2:
+            yes_samples.append(item)
+        elif item['label'] == 'No' and len(no_samples) != 2:
+            no_samples.append(item)
+        
+        # Break early if we have enough samples
+        if len(yes_samples) == 2 and len(no_samples) == 2:
+            break
+    
+    return yes_samples + no_samples
+
+def format_sugarcrepe(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
+    prompt = '<image>\n{} Answer with Yes or No.'
+    image_list = []
+    
+    if cur_item is None:
+        data = random.sample(all_data, 1)[0]
+    else:
+        data = cur_item
+        
+    image = data['image']
+    question = data['question']
+    label = data['label']
+    question_id = data['question_id']
+    
+    few_shot_prompt = ''
+    if num_shot > 0:
+        sampled_data = sugarcrepe_balance(all_data)
         for sample in sampled_data:
             few_shot_prompt += prompt.format(sample['question']) + f" {sample['label']}\n"
             image_list.append(sample["image"])
