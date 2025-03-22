@@ -1,6 +1,6 @@
 # Sparse Attention Vectors (SAVs)
 ---
-*SAVs are a lightweight few-shot method for extracting truly multimodal features (from image, text, and interleaved inputs) from generative large multimodal models to enable state-of-the-art (SOTA) performance on any vision-language task with discrete labels (e.g. classification or safety alignment).*
+*SAVs is an interpretable feature extraction method that enables state-of-the-art (SOTA) few-shot performance on a variety of discrete-label classification tasks: surpassing other few-shot and even LoRA-finetuned baselines.*
 
 
 <p align="center">
