@@ -15,6 +15,16 @@
 
 ### Quickstart
 ---
+This is very much a _quick_start. More details about set up can be found later in the README.
+
+```python
+git clone https://github.com/chancharikmitra/SAVs.git
+cd SAVs
+
+conda create -n savs python=3.10 -y
+conda activate savs
+pip install -e .
+```
 
 To get started using our method for classification is as easy as setting up the data you want to use! 
 
