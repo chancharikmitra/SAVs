@@ -1,12 +1,14 @@
 import json
 import os
 
-label_list = []
-with open('vlguard_train_full.json', 'r') as readfile:
-    data = json.load(readfile)
-    for item in data:
-        label = item.pop('answer')
-        item['label'] = label
+data_list = []
+with open('camerabench_trainset/has_zoom_out.jsonl', 'r') as readfile:
+    for line in readfile:
+        item = json.loads(line)
+        label = item.pop('question')
+        item['question'] = 'Does the camera zoom out?'
+        data_list.append(item)
 
-with open('vlguard_full_train.json', 'w') as writefile:
-    json.dump(data, writefile, indent=4)
+with open('camerabench_trainset/has_zoom_out.jsonl', 'w') as writefile:
+    for json_obj in data_list:
+        writefile.write(json.dumps(json_obj) + '\n')
