@@ -40,8 +40,8 @@ And then for simple classification on your data run the following command for yo
 python3 -m src.run \
     --model_name model_name \
     --data_name general \
-    --train_path /path/to/train.json \
-    --val_path /path/to/test.json
+    --train_path /path/to/train.jsonl \
+    --val_path /path/to/test.jsonl
 ```
 
 ### Method Overview
