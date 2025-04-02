@@ -61,7 +61,6 @@ def format_general(all_data, cur_item=None, num_shot=0, model_helper=None, split
     image = data['image']
     question = data['question']
     label = data['label']
-    question_id = data['question_id']
     
     few_shot_prompt = ''
     if num_shot > 0:
