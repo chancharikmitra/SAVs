@@ -31,11 +31,8 @@ To get started using our method for classification is as easy as setting up the 
 Simply format your train and test data with the following fields in `.jsonl` file format:
 
 ```
-<<<<<<< HEAD
 {"image": "image_or_video_file_path", "question": "Input text", "label": "desired_label"}
-=======
 {"image": "image_or_video_file_path", "question": "input_text", "question_id": 0, "label": "desired_label"}
->>>>>>> d4170c7903be1d141a6e79a27eea26667f7ddb66
 ```
 
 And then for simple classification on your data run the following command for your choice of model LLaVA-OneVison-7B (`llava_ov`) or Qwen2.5-VL-7B (`qwen2.5_vl`).
