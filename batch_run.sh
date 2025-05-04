@@ -82,8 +82,8 @@ echo "-----------------------------------------"
 printf "%-25s %-15s %-15s\n" "Split" "qwen2.5-vl" "qwen2.5-vl-ft"
 echo "-----------------------------------------"
 for split in "${SPLITS[@]}"; do
-  base_acc=$(grep "Raw Accuracy" "logs/qwen2.5-vl/$split.log" | tail -1 | awk '{print $3}')
-  ft_acc=$(grep "Raw Accuracy" "logs/qwen2.5-vl-ft/$split.log" | tail -1 | awk '{print $3}')
+  base_acc=$(grep "Raw Accuracy" "logs/camcentric/qwen2.5-vl/$split.log" | tail -1 | awk '{print $3}')
+  ft_acc=$(grep "Raw Accuracy" "logs/camcentric/qwen2.5-vl-ft/$split.log" | tail -1 | awk '{print $3}')
   printf "%-25s %-15s %-15s\n" "$split" "$base_acc" "$ft_acc"
 done
 echo "-----------------------------------------"

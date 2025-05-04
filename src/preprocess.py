@@ -13,7 +13,7 @@ import os
 def open_data(dataset_name, path):
 
     jsonl_format_dataset = ["natural_ret", "sugarcrepe", "general"]
-    list_format_dataset = ["vlguard", "MHalu", "eurosat", "blink", "pets"]
+    list_format_dataset = ["vlguard", "MHalu", "eurosat", "blink", "pets", "mrb"]
 
 
     with open(path, 'r') as json_file:
@@ -46,12 +46,14 @@ def get_format_func(cur_dataset):
         return format_eurosat
     if cur_dataset == "pets":
         return format_pets
+    if cur_dataset == "mrb":
+        return format_mrb
 
 
 def format_general(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
 
     # with open()
-    prompt = wood_defects_prompt+ '\n{}'
+    prompt = '{}'
     image_list = []
     
     if cur_item is None:
@@ -75,7 +77,66 @@ def format_general(all_data, cur_item=None, num_shot=0, model_helper=None, split
     
     return full_text, image_list, label, question_id
 
+def format_mrb(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
 
+    prefix = "/home/raychai/multimodal_rewardbench/data/"
+
+    judge_prompt = (
+        "Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. "
+        "You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. "
+        "Begin your evaluation by comparing the two responses and provide a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. "
+        "Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. "
+        "After providing your explanation, output your final verdict by strictly following this format: \"[[A]]\" if assistant A is better, \"[[B]]\" if assistant B is better.\n\n"
+        "[User Question]\n{question}\n\n"
+        "[The Start of Assistant A's Answer]\n{answer_a}\n[The End of Assistant A's Answer]\n\n"
+        "[The Start of Assistant B's Answer]\n{answer_b}\n[The End of Assistant B's Answer]"
+    )
+    # this is the default prompt we are using 
+    data = cur_item
+
+    relative_image_path = data["Image"]
+    full_image_path = os.path.join(prefix, relative_image_path)
+
+ 
+    question = data["Text"]
+    answer_a = data["Output1"]
+    answer_b = data["Output2"]
+
+
+    true_label = "B" if data["Better"] == "Output2" else "A"
+
+    few_shot_prompt = ""
+    image_list = []
+    
+    if num_shot > 0:
+        few_shot_samples = random.sample(all_data, num_shot)
+        for sample in few_shot_samples:
+            sample_question = sample["Text"]
+            sample_answer_a = sample["Output1"]
+            sample_answer_b = sample["Output2"]
+
+            sample_label = "B" if sample["Better"] == "Output2" else "A"
+
+            few_shot_prompt += judge_prompt.format(
+                question=sample_question,
+                answer_a=sample_answer_a,
+                answer_b=sample_answer_b
+            ) + f"\nCorrect Judgment: [[{sample_label}]]\n\n"
+
+            sample_image_relative = sample.get("Image", "")
+            if sample_image_relative:
+                few_shot_full_image = os.path.join(prefix, sample_image_relative)
+                image_list.append(few_shot_full_image)
+
+    full_prompt = few_shot_prompt + judge_prompt.format(
+        question=question,
+        answer_a=answer_a,
+        answer_b=answer_b
+    )
+
+    image_list.append(full_image_path)
+
+    return full_prompt, image_list, true_label, data["ID"]
 
 def format_vlguard(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
 
