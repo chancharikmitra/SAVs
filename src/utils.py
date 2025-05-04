@@ -58,7 +58,7 @@ def load_model(model_name, cur_dataset, lora_path=None):
     elif model_name == "qwen2vl":
         from transformers import Qwen2VLForConditionalGeneration
 
-        model = Qwen2VLForConditionalGeneration.from_pretrained( "Qwen/Qwen2-VL-7B-Instruct", torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
+        model = Qwen2VLForConditionalGeneration.from_pretrained("Qwen/Qwen2-VL-7B-Instruct", torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
 
         model.eval()
         model.requires_grad_(False)

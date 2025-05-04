@@ -290,7 +290,7 @@ def format_natural_ret(all_data, cur_item=None, num_shot=0, model_helper=None, s
         data = random.sample(all_data, 1)[0]
     else:
         data = cur_item
-        
+    print(f'\n\n Data {data}')
     image = data['image']
     question = data['question']
     label = data['label']
