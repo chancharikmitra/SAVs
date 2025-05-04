@@ -4,6 +4,8 @@ import copy
 import requests
 from .preprocess import *
 
+from decord import VideoReader, cpu
+
 
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
 from llava.conversation import conv_templates, SeparatorStyle
@@ -106,27 +108,79 @@ class llavaOVHelper(ModelHelper):
                 self.all_heads.append((layer, head, -1))
 
 
-    def insert_image(self, text, image_list):
+    # def insert_image(self, text, image_list):
 
+    #     conv_template = "qwen_1_5"
+    #     conv = copy.deepcopy(conv_templates[conv_template])
+    #     conv.append_message(conv.roles[0], text)
+    #     conv.append_message(conv.roles[1], None)
+    #     prompt_question = conv.get_prompt()
+
+
+    #     input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(self.model.device)
+
+    #     if image_list == []:
+    #         return (input_ids, None, None)
+
+    #     image_list = load_images(image_list)
+    #     image_sizes = [image.size for image in image_list]
+
+    #     image_tensors = process_images(image_list, self.processor, self.model.config)
+    #     image_tensors = [_image.to(dtype=torch.float16, device=self.model.device) for _image in image_tensors]
+
+    #     return (input_ids, image_tensors, image_sizes)
+
+    
+    def load_video(self, video_path, num_frames=16):
+        vr = VideoReader(video_path, ctx=cpu(0))
+        total_frame_num = len(vr)
+        uniform_sampled_frames = np.linspace(0, total_frame_num - 1, num_frames, dtype=int)
+        frame_idx = uniform_sampled_frames.tolist()
+        sampled_frames = vr.get_batch(frame_idx).asnumpy()
+        return sampled_frames
+
+    def insert_image(self, text, image_list):
+        # Prepare conversation template
         conv_template = "qwen_1_5"
         conv = copy.deepcopy(conv_templates[conv_template])
-        conv.append_message(conv.roles[0], text)
+        conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\n" + text)
         conv.append_message(conv.roles[1], None)
         prompt_question = conv.get_prompt()
 
-
+        # Process text input
         input_ids = tokenizer_image_token(prompt_question, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(self.model.device)
 
-        if image_list == []:
-            return (input_ids, None, None)
+        # Return early if no images/videos
+        if not image_list:
+            return (input_ids, None, None, None)
 
-        image_list = load_images(image_list)
-        image_sizes = [image.size for image in image_list]
-
-        image_tensors = process_images(image_list, self.processor, self.model.config)
-        image_tensors = [_image.to(dtype=torch.float16, device=self.model.device) for _image in image_tensors]
-
-        return (input_ids, image_tensors, image_sizes)
+        # Process all images/videos
+        processed_data = []
+        image_sizes = []
+        modalities = []
+        
+        for image_path in image_list:
+            if image_path.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                # Video processing
+                video_frames = self.load_video(image_path)
+                frames_tensor = self.processor.preprocess(video_frames, return_tensors="pt")["pixel_values"].half().to(self.model.device)
+                processed_data.append(frames_tensor)
+                # For videos, store frame-level image sizes
+                frame_sizes = [frames_tensor.shape[2:] for _ in range(frames_tensor.shape[0])]
+                image_sizes.append(frame_sizes)
+                modalities.append("video")
+            else:
+                # Regular image processing
+                image = Image.open(image_path).convert('RGB')
+                image_tensor = process_images([image], self.processor, self.model.config)
+                image_tensor = [_image.to(dtype=torch.float16, device=self.model.device) for _image in image_tensor]
+                processed_data.append(image_tensor[0])
+                image_sizes.append(image_tensor[0].shape[1:])
+                modalities.append(None)
+        
+        # Only set modalities to None if we don't have any videos
+        has_videos = any(m == "video" for m in modalities)
+        return (input_ids, processed_data, image_sizes, modalities if has_videos else None)
     
 
     def forward(self, model_input, labels=None):
@@ -134,7 +188,8 @@ class llavaOVHelper(ModelHelper):
         result = self.model(model_input[0],
             images=model_input[1],
             image_sizes=model_input[2],
-            labels=labels)
+            labels=labels,
+            modalities=model_input[3])
         return result
     
 
@@ -146,8 +201,8 @@ class llavaOVHelper(ModelHelper):
             image_sizes=model_input[2],
             do_sample=False,
             temperature=0,
-
             max_new_tokens=max_new_tokens,
+            modalities=model_input[3]
         )
         
         return self.tokenizer.batch_decode(cont, skip_special_tokens=True)[0]
@@ -176,30 +231,55 @@ class Qwen2Helper(ModelHelper):
 
     def insert_image(self, text, image_list):
 
-        messages = [
+        if image_list[0].lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
+            messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": img} for img in image_list
+                    {"type": "video", "video": img} for img in image_list
                 ] + [
                     {"type": "text", "text": text}
                 ]
             }
         ]
+            formatted_text = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            image_inputs, video_inputs, video_kwargs = process_vision_info(messages, return_video_kwargs=True)
 
-
-        formatted_text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        image_inputs, video_inputs = process_vision_info(messages)
-
-        inputs = self.processor(
+            inputs = self.processor(
             text=[formatted_text],
             images=image_inputs,
             videos=video_inputs,
             padding=True,
-            return_tensors="pt",
-        ).to("cuda")
+            fps=8.0,
+            return_tensors="pt"
+            ).to("cuda")
+        else:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": img} for img in image_list
+                    ] + [
+                        {"type": "text", "text": text}
+                    ]
+                }
+            ]
+            formatted_text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+            image_inputs, video_inputs = process_vision_info(messages)
+
+        
+
+            inputs = self.processor(
+                text=[formatted_text],
+                images=image_inputs,
+                videos=video_inputs,
+                padding=True,
+                return_tensors="pt",
+            ).to("cuda")
 
         
         return inputs

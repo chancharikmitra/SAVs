@@ -11,7 +11,39 @@
 
 ### 📰 News
 - [01/13/2025] 🔥 SAVs codebase released publicly!
+- [04/01/2025] 🎥 Added video inference capabilities!
 
+### Quickstart
+---
+This is very much a _quick_start. More details about set up can be found later in the README.
+
+```python
+git clone https://github.com/chancharikmitra/SAVs.git
+cd SAVs
+
+conda create -n savs python=3.10 -y
+conda activate savs
+pip install -e .
+```
+
+To get started using our method for classification is as easy as setting up the data you want to use! 
+
+Simply format your train and test data with the following fields in `.jsonl` file format:
+
+```
+{"image": "image_or_video_file_path", "question": "Input text", "label": "desired_label"}
+{"image": "image_or_video_file_path", "question": "input_text", "question_id": 0, "label": "desired_label"}
+```
+
+And then for simple classification on your data run the following command for your choice of model LLaVA-OneVison-7B (`llava_ov`) or Qwen2.5-VL-7B (`qwen2.5_vl`).
+
+```python 
+python3 -m src.run \
+    --model_name model_name \
+    --data_name general \
+    --train_path /path/to/train.jsonl \
+    --val_path /path/to/test.jsonl
+```
 
 ### Method Overview
 ---

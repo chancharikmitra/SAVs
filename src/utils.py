@@ -8,7 +8,7 @@ import json
 import random
 from tqdm import tqdm
 from typing import Optional
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, AutoModelForVision2Seq, logging
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor, Qwen2_5_VLForConditionalGeneration, AutoModelForVision2Seq, logging
 import sys
 from collections import Counter
 logging.set_verbosity_warning()
@@ -64,6 +64,17 @@ def load_model(model_name, cur_dataset, lora_path=None):
         model.requires_grad_(False)
         
         processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
+
+        model_helper = Qwen2Helper(model, processor, cur_dataset)
+    elif model_name == "qwen2.5_vl":
+        from transformers import Qwen2_5_VLForConditionalGeneration
+
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained( "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
+
+        model.eval()
+        model.requires_grad_(False)
+        
+        processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct")
 
         model_helper = Qwen2Helper(model, processor, cur_dataset)
 
