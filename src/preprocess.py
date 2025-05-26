@@ -13,7 +13,7 @@ import os
 def open_data(dataset_name, path):
 
     jsonl_format_dataset = ["natural_ret", "sugarcrepe", "general"]
-    list_format_dataset = ["vlguard", "MHalu", "eurosat", "blink", "pets", "mrb"]
+    list_format_dataset = ["vlguard", "MHalu", "eurosat", "blink", "pets", "mrb", "mrb_individual"]
 
 
     with open(path, 'r') as json_file:
@@ -48,6 +48,8 @@ def get_format_func(cur_dataset):
         return format_pets
     if cur_dataset == "mrb":
         return format_mrb
+    if cur_dataset == "mrb_individual":
+        return format_mrb_individual
 
 
 def format_general(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
@@ -81,17 +83,29 @@ def format_mrb(all_data, cur_item=None, num_shot=0, model_helper=None, split="tr
 
     prefix = "/home/raychai/multimodal_rewardbench/data/"
 
-    judge_prompt = (
-        "Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. "
-        "You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. "
-        "Begin your evaluation by comparing the two responses and provide a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. "
-        "Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. "
-        "After providing your explanation, output your final verdict by strictly following this format: \"[[A]]\" if assistant A is better, \"[[B]]\" if assistant B is better.\n\n"
-        "[User Question]\n{question}\n\n"
-        "[The Start of Assistant A's Answer]\n{answer_a}\n[The End of Assistant A's Answer]\n\n"
-        "[The Start of Assistant B's Answer]\n{answer_b}\n[The End of Assistant B's Answer]"
-    )
+    # judge_prompt = (
+    #     "Please act as an impartial judge and evaluate the quality of the responses provided by two AI assistants to the user question displayed below. "
+    #     "You should choose the assistant that follows the user's instructions and answers the user's question better. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of their responses. "
+    #     "Begin your evaluation by comparing the two responses and provide a short explanation. Avoid any position biases and ensure that the order in which the responses were presented does not influence your decision. "
+    #     "Do not allow the length of the responses to influence your evaluation. Do not favor certain names of the assistants. Be as objective as possible. "
+    #     "After providing your explanation, output your final verdict by strictly following this format: \"[[A]]\" if assistant A is better, \"[[B]]\" if assistant B is better.\n\n"
+    #     "[User Question]\n{question}\n\n"
+    #     "[The Start of Assistant A's Answer]\n{answer_a}\n[The End of Assistant A's Answer]\n\n"
+    #     "[The Start of Assistant B's Answer]\n{answer_b}\n[The End of Assistant B's Answer]"
+    # )
     # this is the default prompt we are using 
+
+    judge_prompt = (
+        # "Please act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question displayed below. "
+        # "Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of the response in relation to the user's question and image (if provided). "
+        # "Provide a short explanation of your evaluation. "
+        # Changed the final instruction to predict preference based on the single output
+        # "After providing your explanation, output your final verdict by strictly following this format: \"[[preferred]]\" if you think this response is likely the preferred one, or \"[[non-preferred]]\" if you think it is likely the non-preferred one.\n\n"
+        #"[User Question]\n{question}\n\n"
+        # Changed from Assistant A/B to just one Assistant
+        #"[The Start of AI Assistant's Answer]\n{answer}\n[The End of AI Assistant's Answer]"
+        "Question: {question}\n\nAnswer 1: {answer_a}\n\nAnswer 2: {answer_b}"
+    )
     data = cur_item
 
     relative_image_path = data["Image"]
@@ -103,7 +117,8 @@ def format_mrb(all_data, cur_item=None, num_shot=0, model_helper=None, split="tr
     answer_b = data["Output2"]
 
 
-    true_label = "B" if data["Better"] == "Output2" else "A"
+    # true_label = "B" if data["label"] == "Output2" else "A"
+    true_label = data["label"]
 
     few_shot_prompt = ""
     image_list = []
@@ -115,7 +130,8 @@ def format_mrb(all_data, cur_item=None, num_shot=0, model_helper=None, split="tr
             sample_answer_a = sample["Output1"]
             sample_answer_b = sample["Output2"]
 
-            sample_label = "B" if sample["Better"] == "Output2" else "A"
+            # sample_label = "B" if sample["label"] == "Output2" else "A"
+            sample_label = sample["label"]
 
             few_shot_prompt += judge_prompt.format(
                 question=sample_question,
@@ -137,6 +153,98 @@ def format_mrb(all_data, cur_item=None, num_shot=0, model_helper=None, split="tr
     image_list.append(full_image_path)
 
     return full_prompt, image_list, true_label, data["ID"]
+
+def format_mrb_individual(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
+    """
+    Formats a prompt for evaluating a single AI response based on user query and image,
+    predicting if the response is 'preferred' or 'non-preferred'.
+    Assumes input data (all_data, cur_item) is in the transformed, individual format.
+    """
+
+    prefix = "/home/raychai/multimodal_rewardbench/data/" # Assuming same base path
+
+    # --- New Prompt for Evaluating a Single Output ---
+    evaluate_prompt = (
+        # "Please act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question displayed below. "
+        # "Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of the response in relation to the user's question and image (if provided). "
+        # "Provide a short explanation of your evaluation. "
+        # Changed the final instruction to predict preference based on the single output
+        # "After providing your explanation, output your final verdict by strictly following this format: \"[[preferred]]\" if you think this response is likely the preferred one, or \"[[non-preferred]]\" if you think it is likely the non-preferred one.\n\n"
+        #"[User Question]\n{question}\n\n"
+        # Changed from Assistant A/B to just one Assistant
+        #"[The Start of AI Assistant's Answer]\n{answer}\n[The End of AI Assistant's Answer]"
+        "Question: {question}\n\n Answer: {answer}"
+    )
+    # --- End New Prompt ---
+
+    if cur_item is None:
+        # Handle case where cur_item might not be provided directly (e.g., if only using few-shot)
+        # This might need adjustment based on how the function is called in your pipeline
+        print("Warning: cur_item is None in format_mrb_individual.")
+        return None, [], None, None # Or raise an error
+
+    data = cur_item # Represents a single transformed item
+
+    # --- Extract data based on the new format ---
+    relative_image_path = data.get("Image", "") # Use .get for safety if Image might be missing
+    full_image_path = os.path.join(prefix, relative_image_path) if relative_image_path else None
+
+    question = data["Text"]
+    answer = data["Output"] #"Answer: " + data["Output"].split("Answer:")[1] # Use the single 'Output' field
+    true_label = data["label"] # Use the 'label' field ("preferred" or "non-preferred")
+    item_id = data["ID"] # Use the potentially modified ID (e.g., "someid_output1")
+    # --- End Data Extraction ---
+
+    few_shot_prompt = ""
+    image_list = []
+
+    if num_shot > 0 and all_data:
+        # Ensure all_data is not empty and contains items in the *individual* format
+        try:
+            few_shot_samples = random.sample(all_data, num_shot)
+        except ValueError:
+             print(f"Warning: Requested {num_shot} few-shot samples, but only {len(all_data)} available.")
+             few_shot_samples = random.sample(all_data, len(all_data))
+
+
+        for sample in few_shot_samples:
+            # Extract data for the few-shot sample (assuming individual format)
+            sample_question = sample["Text"]
+            sample_answer = sample["Output"]#"Answer: " + sample["Output"].split("Answer:")[1]
+            sample_label = sample["label"] # "preferred" or "non-preferred"
+
+            # Format using the *new* evaluate_prompt template
+            few_shot_prompt += evaluate_prompt.format(
+                question=sample_question,
+                answer=sample_answer
+            # Add the correct judgment based on the sample's label
+            ) + f"\nCorrect Judgment: [[{sample_label}]]\n\n"
+
+            # Add image if present in the few-shot sample
+            sample_image_relative = sample.get("Image", "")
+            if sample_image_relative:
+                few_shot_full_image = os.path.join(prefix, sample_image_relative)
+                # Avoid adding duplicate images if sampling might pick related items
+                if few_shot_full_image not in image_list:
+                     image_list.append(few_shot_full_image)
+
+    # Format the main prompt for the current item
+    main_prompt = evaluate_prompt.format(
+        question=question,
+        answer=answer
+    )
+
+    full_prompt = few_shot_prompt + main_prompt
+
+    # Add the main image (if it exists) to the end of the list
+    if full_image_path and full_image_path not in image_list:
+        image_list.append(full_image_path)
+    elif full_image_path is None:
+         print(f"Note: No image path found or generated for item ID '{item_id}'.")
+
+    # print(full_prompt)
+    # Return the prompt, image list, the true preference label, and the item ID
+    return full_prompt, image_list, true_label, item_id
 
 def format_vlguard(all_data, cur_item=None, num_shot=0, model_helper=None, split="train"):
 

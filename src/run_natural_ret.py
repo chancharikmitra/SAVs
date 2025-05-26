@@ -35,8 +35,8 @@ def eval_dataset(args):
                pred = model.generate(model_input, max_new_tokens=1).strip()
            else:
                # Regular embedding-based evaluation
-               pred = mllm_classify(item, model, multimodal_embeddings)
-               
+               pred, vote_counts = mllm_classify_with_counts(item, model, multimodal_embeddings)
+               print(f'Vote Counts {vote_counts}')
            print(f'Pred {pred} Label {item["label"]}')
            group_preds.append(pred == item['label'])
        

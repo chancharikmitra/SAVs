@@ -55,7 +55,7 @@ def load_model(model_name, cur_dataset, lora_path=None):
         model.eval()
         model.requires_grad_(False)
         model_helper = llavaOVHelper(model, tokenizer, image_processor, cur_dataset)
-    elif model_name == "qwen2vl":
+    elif model_name == "qwen2_vl":
         from transformers import Qwen2VLForConditionalGeneration
 
         model = Qwen2VLForConditionalGeneration.from_pretrained("Qwen/Qwen2-VL-7B-Instruct", torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
@@ -69,7 +69,7 @@ def load_model(model_name, cur_dataset, lora_path=None):
     elif model_name == "qwen2.5_vl":
         from transformers import Qwen2_5_VLForConditionalGeneration
 
-        model = Qwen2_5_VLForConditionalGeneration.from_pretrained( "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype=torch.bfloat16, device_map="auto", attn_implementation="flash_attention_2")
 
         model.eval()
         model.requires_grad_(False)
@@ -175,6 +175,7 @@ def get_class_activations(train_dataset, model, attn_heads):
 
 
     for item in tqdm(train_dataset):
+        # print(f'Sample {item}')
 
         mean_activations = get_last_mean_head_activations([item], model, N_TRIALS = 1, shot=0)
         head_act = []
@@ -249,6 +250,7 @@ def retrieve_examples(sample_activations, cur_activation):
         all_sample.append(scores.argmax(dim=0).item())
 
     counter = Counter(all_sample)
+    # print(counter)
     most_common = counter.most_common()
 
     chosen_examples = []
@@ -256,6 +258,39 @@ def retrieve_examples(sample_activations, cur_activation):
         chosen_examples.append(item[0])
     return chosen_examples
 
+def retrieve_examples_with_counts(sample_activations, cur_activation):
+    """
+    Calculates similarity for each head, determines the best matching class per head,
+    and returns the votes tallied per class index.
+
+    Parameters:
+    sample_activations: Pre-calculated average activations for each class. Shape (num_classes, num_heads, hidden_dim)
+    cur_activation: Activations for the current query input. Shape (num_heads, hidden_dim)
+
+    Returns:
+    list: A list of tuples sorted by vote count: [(class_index, vote_count), ...]
+          Represents the number of heads voting for each class index.
+    """
+    head_votes = [] # Stores the predicted class index for each head
+
+    # Iterate through each head's activation in the query
+    for i in range(cur_activation.shape[0]): # cur_activation shape: (num_heads, hidden_dim)
+        # Compare the current head's activation against the average activation of that same head for all classes
+        # sample_activations[:, i, :] shape: (num_classes, hidden_dim)
+        # cur_activation[i, :] shape: (hidden_dim)
+        scores = torch.nn.functional.cosine_similarity(sample_activations[:, i, :], cur_activation[i, :], dim=-1)
+        # Find the class index with the highest similarity for this head
+        best_class_index_for_head = scores.argmax(dim=0).item()
+        head_votes.append(best_class_index_for_head)
+
+    # Count the votes for each class index
+    counter = Counter(head_votes)
+    # print(f"Head votes per class index: {counter}") # Optional: for debugging
+
+    # Get the results sorted by the number of votes (most common first)
+    votes_by_index = counter.most_common() # Returns list of (index, count) tuples
+
+    return votes_by_index
 
 def mllm_encode(model, train_data, num_head):
 
@@ -302,5 +337,44 @@ def mllm_classify(inputs, model, class_embed):
     cur_int_label = top_k_examples[0]
     return class_embed['int_to_str'][cur_int_label]
 
+def mllm_classify_with_counts(inputs, model, class_embed):
+    """
+    Classifies the input based on head activations and returns the predicted label
+    along with the vote counts per class from the attention heads.
 
+    Parameters:
+    inputs: The input item (e.g., a dictionary containing data for one sample).
+    model: The model helper object.
+    class_embed: Dictionary containing 'activations', 'top_heads', 'int_to_str'.
+                 'activations' shape: (num_classes, num_heads, hidden_dim)
+
+    Returns:
+    tuple: (predicted_label, label_vote_counts)
+        - predicted_label (str): The class label with the most votes.
+        - label_vote_counts (dict): A dictionary mapping class labels (str) to the number of heads that voted for them.
+                                     Example: {'cat': 15, 'dog': 5}
+    """
+    # Get activations for the specific 'top_heads' for the query input
+    # cur_activations shape: (num_heads, hidden_dim)
+    cur_activations = get_query_activations([inputs], model, class_embed['top_heads'])#.squeeze(dim=0)
+    # print(cur_activations.shape)
+    # Retrieve the vote counts per class index from the heads
+    # votes_by_index is like [(most_voted_index, count1), (next_voted_index, count2), ...]
+    votes_by_index = retrieve_examples_with_counts(class_embed['activations'], cur_activations)
+
+    if not votes_by_index:
+        # Handle cases where no votes were cast (should be rare/impossible if heads exist)
+        print("Warning: No head votes recorded.")
+        return None, {}
+
+    # Determine the winning class index (the first element in the sorted list)
+    winning_index = votes_by_index[0][0]
+
+    # Convert the winning index to the string label
+    predicted_label = class_embed['int_to_str'][winning_index]
+
+    # Convert the vote counts from indices to labels
+    label_vote_counts = {class_embed['int_to_str'][index]: count for index, count in votes_by_index}
+
+    return predicted_label, label_vote_counts
 

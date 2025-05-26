@@ -39,6 +39,10 @@ def eval_dataset(args):
         ###Checking how well it can classify a given query
         for item in tqdm(test_data):
             cur_class = mllm_classify(item, model, multimodal_embeddings)
+
+            # If you want to also obtain the vote counts per class as a dictionary ({"class_name": num_votes}):
+            # pred, vote_counts = mllm_classify_with_counts(item, model, multimodal_embeddings)
+            
             if item['label'] == cur_class:
                 correct_count += 1
         print("SAVs Accuracy:", correct_count / len(test_data))
