@@ -15,7 +15,7 @@
 
 ### Quickstart
 ---
-This is very much a _quick_start. More details about set up can be found later in the README.
+More details about the components of our set up can be found later in the README.
 
 ```python
 git clone https://github.com/chancharikmitra/SAVs.git
@@ -43,6 +43,7 @@ python3 -m src.run \
     --train_path /path/to/train.jsonl \
     --val_path /path/to/test.jsonl
 ```
+Note: If you want to output scores for each class label, please use the commented out `mllm_classify_with_counts` function shown in the `run.py` code.
 
 ### Method Overview
 ---
